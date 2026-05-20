@@ -78,9 +78,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Inteligência competitiva Ford: compare veículos com IA, gere gráficos e relatórios em PDF/Excel.",
       },
-      { property: "og:title", content: "Ford Intelligence" },
+      { property: "og:title", content: "Ford Intelligence — Comparativo de Veículos" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Ford Intelligence — Comparativo de Veículos" },
+      { name: "description", content: "Compare Ford car models side-by-side with detailed specifications and generate insightful reports." },
+      { property: "og:description", content: "Compare Ford car models side-by-side with detailed specifications and generate insightful reports." },
+      { name: "twitter:description", content: "Compare Ford car models side-by-side with detailed specifications and generate insightful reports." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e3d149f5-62ab-4409-b77e-853f31f28028/id-preview-6865c55a--a2df8bb9-f45a-4ef2-974a-f673adce0bdb.lovable.app-1779241649127.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e3d149f5-62ab-4409-b77e-853f31f28028/id-preview-6865c55a--a2df8bb9-f45a-4ef2-974a-f673adce0bdb.lovable.app-1779241649127.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
