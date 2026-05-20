@@ -40,10 +40,65 @@ const compareSchema = z.object({
   concorrente: z.string().min(2).max(50).regex(comparePattern),
 });
 
+export type ComparisonData = {
+  fordName: string;
+  rivalName: string;
+  fordSpecs: Record<string, string>;
+  rivalSpecs: Record<string, string>;
+  attributes: string[];
+  raw: string;
+};
+
+function parseComparison(raw: string): ComparisonData | null {
+  let text = raw;
+  // unwrap gemini-style envelope
+  try {
+    const j = JSON.parse(raw);
+    const inner = j?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof inner === "string") text = inner;
+    else if (typeof j === "string") text = j;
+  } catch {
+    /* not JSON, keep raw */
+  }
+  // strip ```json fences
+  text = text.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+  // extract first JSON object
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1) return null;
+  try {
+    const obj = JSON.parse(text.slice(start, end + 1)) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const keys = Object.keys(obj);
+    if (keys.length < 2) return null;
+    const [fordName, rivalName] = keys;
+    const fordSpecs: Record<string, string> = {};
+    const rivalSpecs: Record<string, string> = {};
+    for (const [k, v] of Object.entries(obj[fordName] ?? {}))
+      fordSpecs[k] = String(v);
+    for (const [k, v] of Object.entries(obj[rivalName] ?? {}))
+      rivalSpecs[k] = String(v);
+    const attributes = Array.from(
+      new Set([...Object.keys(fordSpecs), ...Object.keys(rivalSpecs)]),
+    );
+    return { fordName, rivalName, fordSpecs, rivalSpecs, attributes, raw };
+  } catch {
+    return null;
+  }
+}
+
 export const compareCars = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => compareSchema.parse(input))
   .handler(
-    async ({ data }): Promise<{ result: string; error: string | null }> => {
+    async ({
+      data,
+    }): Promise<{
+      result: string;
+      parsed: ComparisonData | null;
+      error: string | null;
+    }> => {
       try {
         const res = await fetch(`${API_BASE}/veiculos/comparar`, {
           method: "POST",
@@ -56,21 +111,29 @@ export const compareCars = createServerFn({ method: "POST" })
         });
         if (!res.ok) {
           const txt = await res.text();
-          return { result: "", error: `Erro ${res.status}: ${txt.slice(0, 200)}` };
+          return {
+            result: "",
+            parsed: null,
+            error: `Erro ${res.status}: ${txt.slice(0, 200)}`,
+          };
         }
         const text = await res.text();
-        // API returns a JSON string
-        let parsed = text;
+        let inner = text;
         try {
           const j = JSON.parse(text);
-          if (typeof j === "string") parsed = j;
+          if (typeof j === "string") inner = j;
         } catch {
           /* keep raw */
         }
-        return { result: parsed, error: null };
+        const parsed = parseComparison(inner);
+        return { result: inner, parsed, error: null };
       } catch (e) {
         console.error("compareCars failed", e);
-        return { result: "", error: "Não foi possível conectar à API Ford." };
+        return {
+          result: "",
+          parsed: null,
+          error: "Não foi possível conectar à API Ford.",
+        };
       }
     },
   );
