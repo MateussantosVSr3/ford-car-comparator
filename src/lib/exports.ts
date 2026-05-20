@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { EspecificacaoFord } from "./ford.functions";
+import type { ComparisonData } from "./ford.functions";
 
 export type ComparisonRecord = {
   id: string;
@@ -9,74 +9,52 @@ export type ComparisonRecord = {
   versaoFord: string;
   concorrente: string;
   resultado: string;
+  parsed: ComparisonData | null;
 };
 
-export function exportToExcel(
-  specs: EspecificacaoFord[],
-  comparison: ComparisonRecord,
-) {
-  const wb = XLSX.utils.book_new();
+function prettify(k: string) {
+  return k.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+}
 
-  // Sheet 1: Resumo Executivo
-  const resumo = [
+export function exportToExcel(comparison: ComparisonRecord) {
+  const wb = XLSX.utils.book_new();
+  const p = comparison.parsed;
+
+  const resumo: (string | number)[][] = [
     ["RELATÓRIO PERICIAL DE COMPARAÇÃO DE VEÍCULOS"],
     [],
     ["Data", new Date(comparison.date).toLocaleString("pt-BR")],
-    ["Versão Ford", comparison.versaoFord],
-    ["Concorrente", comparison.concorrente],
-    ["ID", comparison.id],
-    [],
-    ["ANÁLISE COMPARATIVA (IA)"],
-    [comparison.resultado],
+    ["Versão Ford solicitada", comparison.versaoFord],
+    ["Concorrente solicitado", comparison.concorrente],
+    ["ID do relatório", comparison.id],
   ];
+  if (p) {
+    resumo.push([], ["Veículo Ford analisado", p.fordName]);
+    resumo.push(["Veículo concorrente analisado", p.rivalName]);
+    resumo.push(["Atributos comparados", p.attributes.length]);
+  }
   const ws1 = XLSX.utils.aoa_to_sheet(resumo);
-  ws1["!cols"] = [{ wch: 25 }, { wch: 80 }];
+  ws1["!cols"] = [{ wch: 30 }, { wch: 60 }];
   XLSX.utils.book_append_sheet(wb, ws1, "Resumo");
 
-  // Sheet 2: Especificações Técnicas
-  const headers = [
-    "ID",
-    "Categoria",
-    "Equipamento",
-    "Versão XLT",
-    "Versão Limited",
-    "Versão Limited Plus",
-  ];
-  const rows = specs.map((s) => [
-    s.id,
-    s.categoria,
-    s.equipamento,
-    s.versaoXlt,
-    s.versaoLimited,
-    s.versaoLimitedPlus,
-  ]);
-  const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws2["!cols"] = [
-    { wch: 6 },
-    { wch: 18 },
-    { wch: 40 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 20 },
-  ];
-  XLSX.utils.book_append_sheet(wb, ws2, "Especificações Ford");
+  if (p) {
+    const head = ["Atributo", p.fordName, p.rivalName];
+    const rows = p.attributes.map((a) => [
+      prettify(a),
+      p.fordSpecs[a] ?? "—",
+      p.rivalSpecs[a] ?? "—",
+    ]);
+    const ws2 = XLSX.utils.aoa_to_sheet([head, ...rows]);
+    ws2["!cols"] = [{ wch: 28 }, { wch: 40 }, { wch: 40 }];
+    XLSX.utils.book_append_sheet(wb, ws2, "Tabela Comparativa");
+  }
 
-  // Sheet 3: Análise numérica para perito
-  const numericRows = specs
-    .map((s) => {
-      const xlt = parseFloat(String(s.versaoXlt).replace(",", "."));
-      const lim = parseFloat(String(s.versaoLimited).replace(",", "."));
-      const limp = parseFloat(String(s.versaoLimitedPlus).replace(",", "."));
-      if (isNaN(xlt) && isNaN(lim) && isNaN(limp)) return null;
-      return [s.categoria, s.equipamento, xlt || 0, lim || 0, limp || 0];
-    })
-    .filter(Boolean) as (string | number)[][];
   const ws3 = XLSX.utils.aoa_to_sheet([
-    ["Categoria", "Equipamento", "XLT", "Limited", "Limited Plus"],
-    ...numericRows,
+    ["Resposta bruta da IA"],
+    [comparison.resultado],
   ]);
-  ws3["!cols"] = [{ wch: 18 }, { wch: 40 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
-  XLSX.utils.book_append_sheet(wb, ws3, "Análise Numérica");
+  ws3["!cols"] = [{ wch: 120 }];
+  XLSX.utils.book_append_sheet(wb, ws3, "Dados brutos");
 
   XLSX.writeFile(
     wb,
@@ -84,14 +62,11 @@ export function exportToExcel(
   );
 }
 
-export function exportToPDF(
-  specs: EspecificacaoFord[],
-  comparison: ComparisonRecord,
-) {
+export function exportToPDF(comparison: ComparisonRecord) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
+  const p = comparison.parsed;
 
-  // Header band
   doc.setFillColor(10, 22, 60);
   doc.rect(0, 0, pageW, 90, "F");
   doc.setTextColor(255, 255, 255);
@@ -112,41 +87,36 @@ export function exportToPDF(
   doc.text("Veículos Comparados", 40, 130);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
-  doc.text(`Ford: ${comparison.versaoFord}`, 40, 150);
-  doc.text(`Concorrente: ${comparison.concorrente}`, 40, 168);
+  doc.text(`Ford: ${p?.fordName ?? comparison.versaoFord}`, 40, 150);
+  doc.text(
+    `Concorrente: ${p?.rivalName ?? comparison.concorrente}`,
+    40,
+    168,
+  );
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text("Análise Comparativa (IA)", 40, 200);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  const lines = doc.splitTextToSize(comparison.resultado, pageW - 80);
-  doc.text(lines, 40, 220);
-
-  // Specs table on new page
-  doc.addPage();
-  doc.setFillColor(10, 22, 60);
-  doc.rect(0, 0, pageW, 50, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("Especificações Técnicas — Ford", 40, 32);
-
-  autoTable(doc, {
-    startY: 70,
-    head: [["Categoria", "Equipamento", "XLT", "Limited", "Limited+"]],
-    body: specs.map((s) => [
-      s.categoria,
-      s.equipamento,
-      s.versaoXlt,
-      s.versaoLimited,
-      s.versaoLimitedPlus,
-    ]),
-    styles: { fontSize: 8, cellPadding: 4 },
-    headStyles: { fillColor: [30, 30, 90], textColor: 255 },
-    alternateRowStyles: { fillColor: [245, 247, 252] },
-    columnStyles: { 1: { cellWidth: 180 } },
-  });
+  if (p) {
+    autoTable(doc, {
+      startY: 200,
+      head: [["Atributo", p.fordName, p.rivalName]],
+      body: p.attributes.map((a) => [
+        prettify(a),
+        p.fordSpecs[a] ?? "—",
+        p.rivalSpecs[a] ?? "—",
+      ]),
+      styles: { fontSize: 9, cellPadding: 5 },
+      headStyles: { fillColor: [30, 30, 90], textColor: 255 },
+      alternateRowStyles: { fillColor: [245, 247, 252] },
+      columnStyles: {
+        0: { cellWidth: 140, fontStyle: "bold" },
+        1: { cellWidth: 180 },
+        2: { cellWidth: 180 },
+      },
+    });
+  } else {
+    doc.setFontSize(10);
+    const lines = doc.splitTextToSize(comparison.resultado, pageW - 80);
+    doc.text(lines, 40, 200);
+  }
 
   doc.save(
     `comparativo-${comparison.versaoFord}-vs-${comparison.concorrente}.pdf`,
