@@ -194,6 +194,13 @@ export function CarCompare() {
             </Button>
           </div>
         </div>
+
+        {apiError && (
+          <div className="relative mt-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive-foreground">
+            <p className="font-semibold text-destructive">API indisponível em produção</p>
+            <p className="mt-1 text-foreground/80">{apiError}</p>
+          </div>
+        )}
       </motion.section>
 
       <AnimatePresence>
