@@ -61,6 +61,7 @@ export function CarCompare() {
   const [concorrente, setConcorrente] = useState("");
   const [current, setCurrent] = useState<ComparisonRecord | null>(null);
   const [history, setHistory] = useState<ComparisonRecord[]>([]);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
     setHistory(loadHistory());
@@ -73,9 +74,11 @@ export function CarCompare() {
       }),
     onSuccess: (res) => {
       if (res.error) {
-        toast.error(res.error);
+        setApiError(res.error);
+        toast.error("Falha na API Ford", { description: res.error.slice(0, 120) });
         return;
       }
+      setApiError(null);
       const record: ComparisonRecord = {
         id: crypto.randomUUID(),
         date: new Date().toISOString(),
@@ -94,7 +97,10 @@ export function CarCompare() {
         toast.success("Comparativo gerado");
       }
     },
-    onError: () => toast.error("Falha ao comparar"),
+    onError: () => {
+      setApiError("Falha de rede ao chamar a API Ford.");
+      toast.error("Falha ao comparar");
+    },
   });
 
   const canCompare =
@@ -188,6 +194,13 @@ export function CarCompare() {
             </Button>
           </div>
         </div>
+
+        {apiError && (
+          <div className="relative mt-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive-foreground">
+            <p className="font-semibold text-destructive">API indisponível em produção</p>
+            <p className="mt-1 text-foreground/80">{apiError}</p>
+          </div>
+        )}
       </motion.section>
 
       <AnimatePresence>
