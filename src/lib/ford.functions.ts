@@ -1,12 +1,23 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const API_BASE = "http://163.176.204.45:8080/api/v1";
+const API_BASE =
+  process.env.FORD_API_BASE ?? "http://163.176.204.45:8080/api/v1";
 
 function authHeader() {
-  const user = process.env.FORD_API_USER ?? "";
-  const pass = process.env.FORD_API_PASS ?? "";
+  const user = process.env.FORD_API_USER ?? "admin.ti";
+  const pass = process.env.FORD_API_PASS ?? "admin123";
   return "Basic " + Buffer.from(`${user}:${pass}`).toString("base64");
+}
+
+function friendlyError(status: number, body: string): string {
+  if (body.includes("error code: 1003") || body.includes("1003")) {
+    return "A API está hospedada em um IP bruto (163.176.204.45) e o servidor publicado (Cloudflare) bloqueia chamadas para IP sem domínio. Configure um hostname público (ex.: api.seudominio.com com HTTPS) e adicione o secret FORD_API_BASE.";
+  }
+  if (status === 401 || status === 403) {
+    return `Erro ${status}: credenciais Ford API inválidas ou bloqueadas.`;
+  }
+  return `Erro ${status}: ${body.slice(0, 200)}`;
 }
 
 export type EspecificacaoFord = {
