@@ -125,7 +125,7 @@ export const compareCars = createServerFn({ method: "POST" })
           return {
             result: "",
             parsed: null,
-            error: `Erro ${res.status}: ${txt.slice(0, 200)}`,
+            error: friendlyError(res.status, txt),
           };
         }
         const text = await res.text();
